@@ -1,188 +1,149 @@
-# PROMOTIONAL TASK 5
-
-from fastapi import FastAPI, Path, Query, HTTPException
-from typing import Annotated
+from fastapi import FastAPI, Form, HTTPException, UploadFile, Depends
+from PIL import Image
 
 app = FastAPI()
 
 
-# TASK 1
+# Contact Form API:
+# Create an API to handle contact form submissions. 
+# Use form data to receive input from users and error handling to validate required fields, returning appropriate status codes for missing or invalid data.
+from typing import Annotated
 
-# Number Range Validator API:
-# Create an API that checks if a given number (path parameter) falls within a specified range.
-# Example: /validate_number/5?min=1&max=10 → True
+@app.post("/add-contact")
+def contact(first_name:Annotated[str, Form()], last_name:Annotated[str, Form()], phone_number:Annotated[str, Form(min_length=11, max_length=11)],age:Annotated[int, Form()]):
+    if not first_name:   # if not: checks if first_name is None or an empty string
+        raise HTTPException(status_code=422, detail="Required Field")
+    if not last_name:
+        raise HTTPException(status_code=422, detail="Required Field")
+    if not phone_number:
+        raise HTTPException(status_code=422, detail="Required Field")
+    if not age:
+        raise HTTPException(status_code=422, detail="Required Field")
+    return {"message":f'Thank You, {first_name} {last_name}!'}
+ 
 
-@app.get('/number/{given_number}')
-def range_validator(given_number:Annotated[int, Path()], min:Annotated[int, Query()], max:Annotated[int, Query()]):
-    if given_number >= min and given_number <= max:
-        return True
-    else:
-        return False
+# Profile Picture Upload API:
+# Develop an API that allows users to upload profile pictures. 
+# Use request files to handle image uploads and dependencies to validate image dimensions and formats, with error handling for invalid submissions.
+
+def validate_pic(picture:UploadFile):
+    allowed_formats = ["image/jpeg", "image/png"]
+    min_width = 400
+    min_height = 500
+    if picture.content_type not in allowed_formats:
+        raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG and PNG are allowed.")
+    # Opening the image file
+    img = Image.open(picture.file)
+    # Checking the image dimensions
+    if img.width < min_width or img.height < min_height:
+        raise HTTPException(status_code=400, detail="Minimum dimensions are 400x500 pixels!")
+    # Checking the image format
+    if img.format not in ["JPEG", "PNG"]:
+        raise HTTPException(status_code=400, detail="Only JPEG and PNG formats are allowed!")
+    return img
+
+    
+@app.post("/profile-pic")
+def upload_pic(picture:UploadFile=Depends(validate_pic)):
+    try:
+        return {"message": f"Uploaded successfully!{picture}"}
+    except HTTPException as e:
+        return {"error": e.detail}
 
 
-# TASK 2
 
-# Simple Arithmetic API:
-# Build an API that performs basic arithmetic operations (add, subtract, multiply, divide) using path parameters.
-# Example: /add/3/5 → 8
+# Multi-Part Form Data API:
+# Create an API that accepts multi-part form data, such as a form with both text and file inputs 
+# (e.g., a job application form with resume uploads). Use dependencies to validate inputs and error handling for missing or invalid data.
 
-@app.get('/add/{first_num}/{second_num}')
-def addition(first_num:Annotated[int, Path()], second_num:Annotated[int, Path()]):
+def check_inputs(first_name, last_name, qualification, resume):
+    if not first_name:
+        raise HTTPException(status_code=422, detail= "Put your first name")
+    if not last_name:
+        raise HTTPException(status_code=422, detail= "Put your last name")
+    if qualification != "Bsc" and qualification != "Msc":
+        raise HTTPException(status_code=422, detail= "Only Bsc or Msc Qualification needed")
+    if not resume:
+        raise HTTPException(status_code=422, detail= "Put your resume")
+    
+    
+@app.post("/fill-form")
+def fill_form(first_name:Annotated[str, Form()], last_name:Annotated[str, Form()], qualification:Annotated[str, Form()], resume:UploadFile):
+    check_inputs(first_name, last_name, qualification, resume)
+    return {"message":"Application Recieved"}
+ 
+
+# Simple Calculator API:
+# Create an API that performs basic arithmetic operations (addition, subtraction, multiplication, division).
+#  Use dependencies to manage and validate input parameters.
+
+def valid_input(first_num, second_num):
+    if type(first_num) != int:
+        raise HTTPException(status_code=422, detail="Number should be integer")
+    if type(second_num) != int:
+        raise HTTPException(status_code=422, detail="Number should be integer")
+
+@app.get('/addition/{first_num}/{second_num}')
+def addition(first_num:int, second_num:int):
+    valid_input(first_num, second_num)
     response = first_num + second_num
     return{"result":f"{response}"}
 
-@app.get('/subtract/{first_num}/{second_num}')
-def subtraction(first_num:Annotated[int, Path()], second_num:Annotated[int, Path()]):
+@app.get('/subtraction/{first_num}/{second_num}')
+def subtraction(first_num:int, second_num:int):
+    valid_input(first_num, second_num)
     response = first_num - second_num
     return{"result":f"{response}"}
 
-@app.get('/multiply/{first_num}/{second_num}')
-def multiplication(first_num:Annotated[int, Path()], second_num:Annotated[int, Path()]):
+@app.get('/multiplication/{first_num}/{second_num}')
+def multiplication(first_num:int, second_num:int):
+    valid_input(first_num, second_num)
     response = first_num * second_num
     return{"result":f"{response}"}
 
-@app.get('/divide/{first_num}/{second_num}')
-def division(first_num:Annotated[int, Path()], second_num:Annotated[int, Path()]):
-    response = first_num / second_num
+@app.get('/division/{first_num}/{second_num}')
+def division(first_num:int, second_num:int):
+    valid_input(first_num, second_num)
+    try:
+        response = first_num / second_num
+    except:
+        raise HTTPException(status_code=422, detail="no Number cannot not be 0")
     return{"result":f"{response}"}
 
 
-# TASK 3
 
 # Todo List API:
-# Develop an API to manage a simple to-do list with endpoints to add, view, and delete tasks.
-# Use request body to add tasks and path parameters to identify tasks.
-# Example: POST /tasks with request body { "task": "Buy groceries" }
+# Build an API to manage a simple to-do list. Use dependencies to handle the storage and retrieval of tasks.
 
 from pydantic import BaseModel
 
 
-class Tasks(BaseModel):
-    task: str
-    
+class Task(BaseModel):
+    id: int
+    task_to_do: str
 
 tasks = []
 
-@app.post("/tasks")
-def add_task(task: Tasks):
-    tasks.append(task)
-    return tasks
 
-@app.get("/view-tasks")
+def create_task(task: Task):
+    tasks.append(task)
+    return task
+
 def get_tasks():
     return tasks
 
 
-@app.get("/tasks/{id}")
-def delete_task(id: int):
-    if id in tasks:
-        tasks.remove(id)
-        return {"message": "Task deleted successfully"}
-        raise HTTPException(status_code=404, detail="Task not found")
+@app.post("/tasks")
+def create_tasks(task: Task):
+    return create_task(task)
 
 
-# TASK 4
-
-# String Length API:
-# Create an API that takes a string as a query parameter and returns its length.
-# Example: /length?text=hello → 5
-
-@app.get('/string')
-def know_length(text:Annotated[str, Query()]):
-    length = len(text)
-    return {"text":f" The length is {length}"}
+@app.get("/tasks")
+def read_tasks():
+    return get_tasks()
 
 
 
-# TASK 5
-
-# Age Checker API:
-# Build an API that checks if a user is an adult based on their age provided as a path parameter.
-# Example: /check_age/20 → "Adult" or "Not an adult
-
-@app.get('/check-age/{age}')
-def age_check(age:Annotated[int, Path()]):
-    if age >= 18:
-        return {"age":f" Adult"}
-    else:
-        return {"age":f"Not an adult"}
-    
-
-
-# TASK 6
-
-# Square Number API:
-# Develop an API that returns the square of a number provided as a path parameter.
-# Example: /square/4 → 16
-
-@app.get('/square/{num}')
-def get_square(num:Annotated[int, Path()]):
-    square = num * num
-    return {"num":f"The square of {num} is {square}"}
 
 
 
-# TASK 7
-
-# BMI Calculator API:
-# Create an API that calculates BMI based on weight and height provided in the request body.
-# Example: POST /bmi with request body { "weight": 70, "height": 1.75 }
-
-class BMI(BaseModel):
-    weight:float
-    height:float
-
-@app.post('/bmi')
-def calculate_bmi(calculate:BMI):
-    # Your BMI is calculated by dividing your weight by your height squared.
-    bmi = calculate.weight/(calculate.height*calculate.height)
-    return f"Your BMI is {bmi}"
-
-
-
-# TASK 8
-
-# Simple Interest Calculator API:
-# Create an API that calculates simple interest based on principal, rate, and time provided in the request body.
-# Example: POST /interest with request body { "principal": 1000, "rate": 5, "time": 2 }
-class SI(BaseModel):
-    principal: int
-    rate: int
-    time: int
-
-@app.post('/simple-interest')
-def cal_SI(cal:SI):
-    simple_interest = (cal.principal * cal.rate * cal.time)/100
-    return simple_interest
-
-
-
-# TASK 9
-
-# Temperature Converter API:
-# Build an API that converts temperatures between Celsius and Fahrenheit using query parameters.
-# Example: /convert_temp?temp=100&unit=celsius → 212
-
-@app.get('/convert-temp')
-def convert(temp:Annotated[float, Query()], unit:Annotated[str, Query()]):
-    if unit == "celsius":
-        return (temp - 32) * 5 / 9
-    elif unit == "fahrenhiet":
-        return (temp * 9 / 5) + 32
-    else:
-        return f"Error"
-    
-
-# TASK 10
-
-
-# Random Number Generator API:
-# Develop an API that returns a random number between a given range provided as query parameters.
-# Example: /random?min=1&max=100 → 42
-
-import random
-
-@app.get('/random-num')
-def get_number(min:Annotated[int, Query], max:Annotated[int, Query]):
-    random_number = random.randint(min, max)
-    return random_number
